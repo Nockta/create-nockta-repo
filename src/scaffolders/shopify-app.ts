@@ -19,6 +19,21 @@ export const shopifyAppScaffolder: ScaffolderDefinition = {
   upstreamTool: "Shopify CLI (app)",
   conceptualCommand: "shopify app init",
   interactiveStdio: true,
+  // D36: no headless options are surfaced — the whole command needs a terminal
+  // (see requiresTerminal below).
+  upstreamOptions: [],
+  // D36 / PART A: `shopify app init` MUST open a browser to log in to a Shopify
+  // Partner organization and select/create the app — verified 2026-07-13
+  // against shopify.dev + Shopify/cli issues #4682/#115 (the CLI cannot
+  // authenticate without a browser; there is no flag to bypass the login/org
+  // step). So it cannot run headlessly from the web flow; the page warns up
+  // front and hands back to the terminal on submit rather than hanging.
+  requiresTerminal: {
+    reason:
+      "Shopify app scaffolding must open a browser to log in to your Partner organization and " +
+      "select or create the app — this can't be completed from the browser wizard. Finish it in " +
+      "your terminal.",
+  },
   buildCommand: (targetPath, passthroughArgs = []) => ({
     name: "shopify-cli",
     command: "shopify",

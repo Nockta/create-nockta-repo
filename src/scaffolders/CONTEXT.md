@@ -21,9 +21,29 @@ actually running it is Milestone 3 (Upstream Runner, `core/run-upstream.ts`, not
   `ScaffolderDefinition` (spec `types/scaffold.ts`). Isolation is deliberate (spec §18.1 "isolate
   scaffolder configs", §18.5 "isolate Shopify app/theme/headless scaffolders") — a flag/command
   change in one upstream tool never touches another module.
-- **`buildCommand(targetPath, passthroughArgs?)` is pure.** Returns `{ name, command, args }` —
-  the same shape the repo profile records (spec §9.2) and `CreateNocktaRepoResult.officialScaffolder`
-  uses (spec §11.4). No `spawn`, no filesystem access, anywhere in this directory.
+- **`buildCommand(targetPath, passthroughArgs?, upstreamAnswers?)` is pure.** Returns
+  `{ name, command, args }` — the same shape the repo profile records (spec §9.2) and
+  `CreateNocktaRepoResult.officialScaffolder` uses (spec §11.4). No `spawn`, no filesystem access,
+  anywhere in this directory.
+- **Upstream options schema (D36).** Each definition may declare `upstreamOptions: UpstreamOption[]`
+  (`{ key, label, description, kind: boolean|choice|text, choices?, default, flag, negatedFlag? }`) —
+  the interactive choices the upstream tool would prompt for, surfaced as web form fields
+  (`web/project-schema.ts` embeds them per type) and mapped to non-interactive flags.
+  `buildCommand`'s 3rd arg is an answers object keyed by `key`; the shared pure
+  `upstream-options.ts::buildUpstreamOptionArgs()` translates it to argv (present-keys-only, so a bare
+  `buildCommand(path)` is unchanged — the wizard/interactive path keeps upstream prompts). Each type
+  splices the option args into its own correct slot (after the target path for most; inside the `--`
+  forwarded segment, after `--path`, for the `npm create` types). `upstreamOptionDefaults()` is the
+  SINGLE source of defaults, shared by the CLI `--yes` path (`commands/create.ts::resolveCreatePlan`)
+  and the web page's pre-fill — they can't drift. Surfaced counts (verified against official docs
+  2026-07-13): next 7, nest 3, shopify-headless 3 (provisional), react-native 1;
+  vite-react-ts/expo/shopify-theme/shopify-app 0 (template pinned / clone-only / needs a terminal).
+- **`requiresTerminal` (D36 / PART A).** `shopify-app` sets `requiresTerminal: { reason }` — its
+  upstream (`shopify app init`) can't run headless (browser login to a Partner org; no flag bypass).
+  The web flow warns up front and hands back to the terminal instead of spawning a doomed run.
+  Independent of `interactiveStdio` ("may prompt") — `requiresTerminal` means "cannot proceed without
+  a human at a terminal". Only `shopify-app` carries it (theme just clones; hydrogen scaffolds with
+  flags).
 - **Passthrough args (spec §5.4) append after each definition's base args** — with one nuance:
   `vite-react-ts` bakes its own `--` separator into the base args (`npm create` requires it to
   forward flags to `create-vite`), so passthrough args land *inside* that already-open forwarded
@@ -87,6 +107,7 @@ actually running it is Milestone 3 (Upstream Runner, `core/run-upstream.ts`, not
 ```
 src/scaffolders/
   registry.ts          SCAFFOLDER_REGISTRY, resolveScaffolder(), listScaffolders(), UnknownRepoTypeError
+  upstream-options.ts   D36 — buildUpstreamOptionArgs()/upstreamOptionDefaults() (pure answers->argv + default source)
   next.ts               npx create-next-app@latest <path>
   vite-react-ts.ts       npm create vite@latest <path> -- --template react-ts
   nest.ts                npx @nestjs/cli new <path>
@@ -107,6 +128,10 @@ src/scaffolders/
 `test/scaffolder-registry.test.ts` — registry completeness (all eight `RepoType`s resolve),
 `UnknownRepoTypeError` structure, per-type `buildCommand` snapshots, passthrough-arg composition
 (incl. the vite `--` separator case and the react-native Name-derivation cases), `interactiveStdio`/
-`provisional` flags.
+`provisional` flags, plus (D36) upstream-option schema validation, `requiresTerminal` gating, and
+per-type option->args (defaults, overrides, the `--`-segment placement for hydrogen, before-passthrough
+ordering).
+`test/upstream-options.test.ts` — the pure `buildUpstreamOptionArgs()`/`upstreamOptionDefaults()`
+helper units (D36).
 `test/list-command.test.ts` — `list --json` shape (single parseable JSON object, `repoTypes` array,
 per-entry field types, no invented preset/pack keys) and human-output smoke coverage.

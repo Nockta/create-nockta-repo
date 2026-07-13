@@ -5,6 +5,7 @@ import {
   listScaffolders,
   resolveScaffolder,
 } from "../src/scaffolders/registry.js";
+import { upstreamOptionDefaults } from "../src/scaffolders/upstream-options.js";
 import { REPO_TYPES } from "../src/types/repo-type.js";
 
 describe("scaffolder registry completeness (spec §11.1, §10 src/scaffolders/)", () => {
@@ -269,5 +270,163 @@ describe("passthrough argument composition (spec §5.4)", () => {
       const withEmptyArgs = resolveScaffolder(repoType).buildCommand("target", []);
       expect(withNoArgs).toEqual(withEmptyArgs);
     }
+  });
+});
+
+describe("upstream option schema (D36)", () => {
+  it("every registry entry declares a well-formed upstreamOptions array", () => {
+    for (const def of listScaffolders()) {
+      expect(Array.isArray(def.upstreamOptions)).toBe(true);
+      for (const opt of def.upstreamOptions ?? []) {
+        expect(typeof opt.key).toBe("string");
+        expect(opt.key.length).toBeGreaterThan(0);
+        expect(typeof opt.label).toBe("string");
+        expect(typeof opt.description).toBe("string");
+        expect(["boolean", "choice", "text"]).toContain(opt.kind);
+        expect(typeof opt.flag).toBe("string");
+        expect(opt.flag.startsWith("--")).toBe(true);
+        if (opt.kind === "boolean") {
+          expect(typeof opt.default).toBe("boolean");
+          expect("choices" in opt && opt.choices !== undefined).toBe(false);
+        } else if (opt.kind === "choice") {
+          expect(typeof opt.default).toBe("string");
+          expect(Array.isArray(opt.choices)).toBe(true);
+          expect(opt.choices!.length).toBeGreaterThan(0);
+          // The default must be one of the offered choice values.
+          expect(opt.choices!.map((c) => c.value)).toContain(opt.default);
+        } else {
+          expect(typeof opt.default).toBe("string");
+        }
+      }
+    }
+  });
+
+  it("only shopify-app declares requiresTerminal (Shopify Partner login)", () => {
+    const flagged = REPO_TYPES.filter((t) => resolveScaffolder(t).requiresTerminal !== undefined);
+    expect(flagged).toEqual(["shopify-app"]);
+    expect(resolveScaffolder("shopify-app").requiresTerminal!.reason).toContain("terminal");
+  });
+
+  it("types that pin every choice surface no options (vite-react-ts, expo, shopify-theme, shopify-app)", () => {
+    for (const t of ["vite-react-ts", "expo", "shopify-theme", "shopify-app"] as const) {
+      expect(resolveScaffolder(t).upstreamOptions).toEqual([]);
+    }
+  });
+});
+
+describe("upstream options -> args (D36)", () => {
+  it("next: no answers -> bare command (wizard/interactive path unchanged)", () => {
+    expect(resolveScaffolder("next").buildCommand("apps/web").args).toEqual(["create-next-app@latest", "apps/web"]);
+  });
+
+  it("next: schema defaults produce the recommended non-interactive argv", () => {
+    const def = resolveScaffolder("next");
+    const cmd = def.buildCommand("apps/web", [], upstreamOptionDefaults(def.upstreamOptions));
+    expect(cmd.args).toEqual([
+      "create-next-app@latest",
+      "apps/web",
+      "--typescript",
+      "--tailwind",
+      "--eslint",
+      "--app",
+      "--no-src-dir",
+      "--turbopack",
+      "--import-alias",
+      "@/*",
+    ]);
+  });
+
+  it("next: overridden answers map to the negated/alternate flags", () => {
+    const cmd = resolveScaffolder("next").buildCommand("apps/web", [], {
+      typescript: false,
+      tailwind: false,
+      eslint: false,
+      app: false,
+      srcDir: true,
+      turbopack: false,
+      importAlias: "~/*",
+    });
+    expect(cmd.args).toEqual([
+      "create-next-app@latest",
+      "apps/web",
+      "--javascript",
+      "--no-tailwind",
+      "--no-linter",
+      "--no-app",
+      "--src-dir",
+      "--webpack",
+      "--import-alias",
+      "~/*",
+    ]);
+  });
+
+  it("next: option args land BEFORE passthrough args", () => {
+    const cmd = resolveScaffolder("next").buildCommand("apps/web", ["--empty"], { tailwind: false });
+    expect(cmd.args).toEqual(["create-next-app@latest", "apps/web", "--no-tailwind", "--empty"]);
+  });
+
+  it("nest: packageManager/language/strict overrides", () => {
+    const cmd = resolveScaffolder("nest").buildCommand("apps/api", [], {
+      packageManager: "pnpm",
+      language: "js",
+      strict: true,
+    });
+    expect(cmd.args).toEqual(["@nestjs/cli", "new", "apps/api", "--package-manager", "pnpm", "--language", "js", "--strict"]);
+  });
+
+  it("nest: strict false emits nothing (no negated flag)", () => {
+    const cmd = resolveScaffolder("nest").buildCommand("apps/api", [], { strict: false });
+    expect(cmd.args).toEqual(["@nestjs/cli", "new", "apps/api"]);
+  });
+
+  it("shopify-headless: option args land INSIDE the -- forwarded segment, after --path, one -- only", () => {
+    const cmd = resolveScaffolder("shopify-headless").buildCommand("apps/storefront", [], {
+      language: "js",
+      styling: "none",
+      markets: "subfolders",
+    });
+    expect(cmd.args).toEqual([
+      "create",
+      "@shopify/hydrogen@latest",
+      "--",
+      "--path",
+      "apps/storefront",
+      "--language",
+      "js",
+      "--styling",
+      "none",
+      "--markets",
+      "subfolders",
+    ]);
+    expect(cmd.args.filter((a) => a === "--")).toHaveLength(1);
+  });
+
+  it("react-native: pm override lands after --skip-git-init true, before passthrough", () => {
+    const cmd = resolveScaffolder("react-native").buildCommand("apps/mobile-app", ["--pm-extra"], { pm: "bun" });
+    expect(cmd.args).toEqual([
+      "@react-native-community/cli@latest",
+      "init",
+      "MobileApp",
+      "--directory",
+      "apps/mobile-app",
+      "--skip-install",
+      "--skip-git-init",
+      "true",
+      "--pm",
+      "bun",
+      "--pm-extra",
+    ]);
+  });
+
+  it("optionless types ignore an answers object", () => {
+    expect(resolveScaffolder("vite-react-ts").buildCommand("apps/web", [], { anything: true }).args).toEqual([
+      "create",
+      "vite@latest",
+      "apps/web",
+      "--",
+      "--template",
+      "react-ts",
+    ]);
+    expect(resolveScaffolder("expo").buildCommand("apps/m", [], { anything: "x" }).args[0]).toBe("create-expo-app@latest");
   });
 });

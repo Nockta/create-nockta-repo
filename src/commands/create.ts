@@ -27,6 +27,8 @@ import {
 import { readRunningPackageVersion } from "../core/read-package-version.js";
 import { WriteRepoProfileError, writeRepoProfile } from "../core/write-repo-profile.js";
 import { UnknownRepoTypeError, resolveScaffolder } from "../scaffolders/registry.js";
+import { upstreamOptionDefaults } from "../scaffolders/upstream-options.js";
+import type { StdioOptions } from "node:child_process";
 import { ADAPTER_TYPES, type AdapterType } from "../types/adapter.js";
 import type { ArchitectureManifest } from "../types/architecture.js";
 import type { CreateNocktaRepoResult } from "../types/create-result.js";
@@ -58,6 +60,22 @@ export type CreateCommandCliOptions = {
    */
   includeSkills?: readonly string[];
   excludeSkills?: readonly string[];
+  /**
+   * D36 web-flow (and `--yes` parity): the surfaced upstream-scaffolder option
+   * answers (keyed by each `UpstreamOption.key`), forwarded to the type's
+   * `buildCommand`. The web submit passes the page's full answers; a plain CLI
+   * `--yes` run with none set falls back to the schema defaults (single source,
+   * so CLI and web can't drift). The wizard/interactive path leaves this
+   * undefined — upstream stays interactive there by design.
+   */
+  upstreamOptions?: Record<string, unknown>;
+  /**
+   * D36 / PART A: set only by the web submit path — spawn the upstream
+   * scaffolder with stdin detached (`["ignore", "inherit", "inherit"]`) so a
+   * browser-driven run never depends on the launching terminal. See
+   * `upstreamStdio()`.
+   */
+  nonInteractiveUpstream?: boolean;
   /** `false` when `--no-skills` was passed (spec §5.6); `undefined`/`true` otherwise. */
   skills?: boolean;
   passthroughArgs?: string[];
@@ -143,16 +161,37 @@ function resolveOfficialScaffolderCommand(
   repoType: string,
   targetPath: string,
   passthroughArgs: string[],
+  upstreamAnswers?: Record<string, unknown>,
 ): ScaffolderCommand {
   const fixtureOverride = process.env[FIXTURE_OVERRIDE_ENV_VAR];
   if (fixtureOverride) {
+    // The fixture override is a bare argv-recording stand-in — it doesn't
+    // understand real upstream flags, so surfaced option args (D36) are NOT
+    // injected here (they'd be meaningless to the fixture). Real option-args
+    // composition is proved directly against each type's buildCommand and via
+    // a real-registry dry run.
     return {
       name: `${repoType} (test fixture override)`,
       command: process.execPath,
       args: [fixtureOverride, targetPath, ...passthroughArgs],
     };
   }
-  return resolveScaffolder(repoType).buildCommand(targetPath, passthroughArgs);
+  return resolveScaffolder(repoType).buildCommand(targetPath, passthroughArgs, upstreamAnswers);
+}
+
+/**
+ * PART A (D36): the stdio the upstream scaffolder is spawned with. The web
+ * submit path (`nonInteractiveUpstream`) detaches stdin
+ * (`["ignore", "inherit", "inherit"]`) so a browser-driven run can never
+ * depend on — or hang on — the launching terminal's stdin, while normal
+ * output still relays to the terminal as the run log. Every other path keeps
+ * the uniform `"inherit"` (spec §18.5) — the CLI `--yes` path's
+ * non-interactivity is already handled by `runUpstream`'s `forceCI`, and the
+ * wizard path is genuinely interactive. Pure/observable so the decision is
+ * unit-tested rather than the spawn intercepted.
+ */
+export function upstreamStdio(cliOptions: Pick<CreateCommandCliOptions, "nonInteractiveUpstream">): StdioOptions {
+  return cliOptions.nonInteractiveUpstream === true ? ["ignore", "inherit", "inherit"] : "inherit";
 }
 
 function readArchitecturePreset(repoType: string, preset: string): ReadArchitectureManifestForPresetResult {
@@ -839,7 +878,20 @@ export function resolveCreatePlan(
     throw error;
   }
 
-  const officialScaffolder = resolveOfficialScaffolderCommand(repoType, validated.targetPath, passthroughArgs);
+  // D36: resolve the surfaced upstream-option answers. The web submit passes a
+  // full answers object; a plain CLI `--yes` run with none set falls back to
+  // the schema's own defaults (single source — CLI and web can't drift). The
+  // wizard/interactive path (no `--yes`, no answers) leaves this undefined, so
+  // buildCommand stays bare and upstream prompts stay interactive by design.
+  const upstreamAnswers: Record<string, unknown> | undefined =
+    cliOptions.upstreamOptions ??
+    (cliOptions.yes === true ? upstreamOptionDefaults(resolveScaffolder(repoType).upstreamOptions) : undefined);
+  const officialScaffolder = resolveOfficialScaffolderCommand(
+    repoType,
+    validated.targetPath,
+    passthroughArgs,
+    upstreamAnswers,
+  );
 
   const plan = buildPlan({
     dryRun,
@@ -911,6 +963,10 @@ export async function runCreateCommand(
       command: plan.officialScaffolder.command,
       args: plan.officialScaffolder.args,
       cwd: cliOptions.cwd ?? process.cwd(),
+      // PART A (D36): the web submit path detaches stdin so a browser-driven
+      // run never depends on the launching terminal; every other path keeps
+      // "inherit". See upstreamStdio().
+      stdio: upstreamStdio(cliOptions),
       // Headless run (CLI `--yes` or the `--web` submit path, which always
       // sets `yes: true` — web/run-create-web.ts::answersToCliOptions()):
       // no human is watching the inherited stdio, so force CI=true so the

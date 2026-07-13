@@ -31,7 +31,9 @@ schema endpoint, curation-board page styling, precedence resolver, browser opene
 - **`project-schema.ts`** — `buildWebProjectSchema()`: create's OWN genesis Model for the Project
   section, assembled from the D28/D29 `build-schema.ts` StepModels (project-path, repo-type,
   also-types, package-manager, architecture, skills-version). Embeds `archPresetsByType` (per-type
-  architecture presets) so the page can rebuild the architecture choices client-side on a type change.
+  architecture presets), plus (D36) `upstreamOptionsByType` (each type's surfaced upstream-scaffolder
+  options from the registry) and `requiresTerminalByType` (the Shopify-app terminal-only reason), so
+  the page can rebuild the "Upstream scaffolder options" card / warning client-side on a type change.
 - **`page.ts`** — `renderCreateWebPage(project, skills, token)`: the self-contained HTML string
   (inline CSS + JS, NO external CDN/font/network). Two section bands. Project section renders create's
   genesis steps (text inputs for path + custom version; radio single-selects for repo-type/pm/arch;
@@ -55,6 +57,15 @@ schema endpoint, curation-board page styling, precedence resolver, browser opene
   scaffold + overlay + headless-inject code the non-interactive CLI uses. `run-inject-skills.ts` was
   extended to accept `includeSkills`/`excludeSkills` and emit inject's `--include-skills`/
   `--exclude-skills` (D19); empty deltas emit NO flag, so every pre-web caller/test is unaffected.
+- **Upstream options + terminal independence (D36).** The Project section renders an "Upstream
+  scaffolder options" card (per-type, reactive on type change) whose answers ride in the submit
+  payload (`CreateWebAnswers.upstreamOptions`) → `answersToCliOptions` → `buildCommand`. The submit
+  ALSO sets `nonInteractiveUpstream: true`, so `commands/create.ts::upstreamStdio()` spawns the
+  upstream scaffolder with stdin detached (`["ignore","inherit","inherit"]`) — a browser-driven run
+  never depends on, or hangs on, the launching terminal (PART A). A `requiresTerminal` type
+  (shopify-app — Partner login) short-circuits in `runCreateWebSubmit` BEFORE any spawn and returns a
+  terminal-handoff result (`requiresTerminal.command`), which the page renders as a "Finish in your
+  terminal" state and `runCreateWeb` echoes to the terminal. Never a hang, never a false success.
 - **Empty-types = empty-skills marker, no spawn (documented decision).** A no-`--type` emit-schema
   spawn would make inject DETECT the server's own cwd (create's repo). So the endpoint short-circuits
   empty `types` to `emptyInjectSchema()`; the page shows a "pick a project type to see skills"
@@ -78,3 +89,7 @@ schema endpoint, curation-board page styling, precedence resolver, browser opene
 - `test/web-create-e2e.test.ts` — `GET /inject-schema` (spawns REAL built inject, next pack + razor
   categories), 403s, `GET /`, and `POST /submit` running the REAL pipeline (scaffolder fixture +
   overlay + real headless inject install with a forwarded razor delta) into a temp target.
+- `test/web-upstream-options.test.ts` (D36) — `answersToCliOptions` forwards `upstreamOptions` +
+  `nonInteractiveUpstream`; `upstreamStdio` semantics; real-registry argv via `resolveCreatePlan`
+  (override / `--yes` defaults / bare wizard); the `requiresTerminal` handoff (shopify-app, no spawn,
+  nothing created); `buildWebProjectSchema` maps; page renders the options card + warning literals.

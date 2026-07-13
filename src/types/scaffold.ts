@@ -13,16 +13,72 @@ export type ScaffolderCommand = {
 };
 
 /**
+ * One surfaced upstream-scaffolder choice (D36) — the declarative description
+ * of a single interactive prompt the upstream tool would otherwise ask, so
+ * both the web form and the non-interactive `--yes`/web-submit args-builder
+ * can drive it without the tool ever prompting. Kept deliberately flat and
+ * JSON-serializable (the web page embeds these verbatim, like the arch preset
+ * map). `buildCommand` consumes an answers object keyed by `key`; the schema
+ * itself owns the flag mapping and the default (single source — the CLI `--yes`
+ * path and the web page pull the SAME defaults, so they can never drift).
+ */
+export type UpstreamOptionKind = "boolean" | "choice" | "text";
+
+/** One selectable value for a `kind: "choice"` option. */
+export type UpstreamOptionChoice = { value: string; label: string };
+
+export type UpstreamOption = {
+  /** Answer key — `buildCommand`'s answers object is keyed by this. */
+  key: string;
+  /** Web form field label. */
+  label: string;
+  /** Web form field help text. */
+  description: string;
+  kind: UpstreamOptionKind;
+  /** Present iff `kind === "choice"`. */
+  choices?: UpstreamOptionChoice[];
+  /** Default answer — boolean for `kind: "boolean"`, a string otherwise. The single source of truth for both the CLI `--yes` path and the web page's pre-fill. */
+  default: boolean | string;
+  /**
+   * Flag mapping. For `kind: "boolean"`: the flag emitted when the answer is
+   * true. For `kind: "choice"`/`"text"`: the flag emitted immediately before
+   * the value (as two argv tokens, `flag value`).
+   */
+  flag: string;
+  /**
+   * `kind: "boolean"` only — the flag emitted when the answer is false (e.g.
+   * `--javascript`, `--no-tailwind`, `--webpack`). Omitted for booleans whose
+   * upstream default-without-flag already matches the "false" case (then a
+   * false answer emits nothing).
+   */
+  negatedFlag?: string;
+};
+
+/**
+ * Marks a repo type whose upstream scaffolder CANNOT run non-interactively —
+ * it unavoidably needs a real terminal/browser (Shopify's Partner login for
+ * `shopify app init`). The web flow surfaces this up front (an inline warning
+ * on that type) and, on submit, hands the user back to their terminal rather
+ * than silently hanging or pretending success (D36 / PART A).
+ */
+export type RequiresTerminal = { reason: string };
+
+/**
  * Builds the concrete upstream command for a repo type, given the resolved
- * target path and any caller-supplied passthrough args (spec §5.4).
+ * target path, any caller-supplied passthrough args (spec §5.4), and any
+ * surfaced upstream-option answers (D36). The answers object is keyed by each
+ * `UpstreamOption.key`; only keys actually present in it emit args, so a bare
+ * `buildCommand(path)` / `buildCommand(path, passthrough)` call (the wizard /
+ * interactive-genesis path, which keeps upstream prompts interactive by
+ * design) is unchanged — option flags are added ONLY on the `--yes`/web path
+ * that passes a real answers object.
  *
- * Pure and side-effect-free — no child-process execution happens here. That
- * is Milestone 3's upstream runner; this milestone only resolves *what*
- * command would run.
+ * Pure and side-effect-free — no child-process execution happens here.
  */
 export type ScaffolderArgsBuilder = (
   targetPath: string,
   passthroughArgs?: string[],
+  upstreamAnswers?: Record<string, unknown>,
 ) => ScaffolderCommand;
 
 /**
@@ -59,6 +115,22 @@ export type ScaffolderDefinition = {
    * Absent (falsy) for stable entries.
    */
   provisional?: boolean;
+  /**
+   * The interactive choices this scaffolder would prompt for, surfaced as web
+   * form fields and mapped to non-interactive flags (D36). Omitted/empty for
+   * types whose contract pins every relevant choice (e.g. vite-react-ts pins
+   * `--template react-ts`, expo pins `--template default@sdk-57`). `buildCommand`
+   * consumes the answers.
+   */
+  upstreamOptions?: UpstreamOption[];
+  /**
+   * Present when the upstream scaffolder cannot run headlessly at all (needs a
+   * real terminal/browser — Shopify Partner login). The web flow warns up front
+   * and hands back to the terminal on submit (D36 / PART A). Independent of
+   * `interactiveStdio` (which merely says "may prompt"); `requiresTerminal`
+   * means "cannot proceed without a human at a terminal".
+   */
+  requiresTerminal?: RequiresTerminal;
   /**
    * Node.js version floor this scaffolder needs, if the spec states one
    * beyond the package baseline (spec §14: `Node.js >= 20`, "effective

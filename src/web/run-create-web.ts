@@ -1,5 +1,6 @@
 import { runCreateCommand } from "../commands/create.js";
 import type { CreateCommandCliOptions } from "../commands/create.js";
+import { resolveScaffolder, UnknownRepoTypeError } from "../scaffolders/registry.js";
 import type { RepoType } from "../types/repo-type.js";
 import { buildWebProjectSchema } from "./project-schema.js";
 import type { WebProjectSchema } from "./project-schema.js";
@@ -42,6 +43,12 @@ export interface CreateWebAnswers {
   skills: { excluded: string[]; included: string[] };
   /** Razor-layer deltas (all optional; `included` = chosen razor skills, `excluded` always empty). */
   razor: { excluded: string[]; included: string[] };
+  /**
+   * D36: the surfaced upstream-scaffolder option answers collected in the
+   * Project section (keyed by each `UpstreamOption.key`), forwarded to the
+   * type's `buildCommand`. Absent/empty for types with no options.
+   */
+  upstreamOptions?: Record<string, unknown>;
   confirmed?: boolean;
 }
 
@@ -50,6 +57,15 @@ export interface CreateWebSubmitResult {
   ok: boolean;
   exitCode: number;
   projectPath: string;
+  /**
+   * D36 / PART A: set when the chosen repo type's upstream scaffolder can't run
+   * headlessly (Shopify Partner login). The submit does NOT run the doomed
+   * headless pipeline — it hands the user back to their terminal with the exact
+   * command to finish with. The page renders a "finish in your terminal" state;
+   * `runCreateWeb` prints the same to the terminal. `ok` is false (nothing was
+   * created) but this is a deliberate handoff, not a crash — exit code 0.
+   */
+  requiresTerminal?: { reason: string; command: string };
 }
 
 export interface CreateWebOptions {
@@ -91,9 +107,24 @@ export function answersToCliOptions(answers: CreateWebAnswers, options: CreateWe
     includeSkills,
     excludeSkills,
     yes: true,
+    // D36: forward the page's surfaced upstream-scaffolder option answers to
+    // buildCommand, and detach the upstream spawn's stdin (PART A) so this
+    // browser-driven run never depends on the launching terminal.
+    upstreamOptions: answers.upstreamOptions,
+    nonInteractiveUpstream: true,
     json: options.json,
     cwd: options.cwd,
   };
+}
+
+/**
+ * D36 / PART A: the terminal-handoff CLI line shown when a `requiresTerminal`
+ * type is submitted from the web flow — re-runs create in `--cli` mode so the
+ * upstream scaffolder gets a real terminal for its login/prompts.
+ */
+export function terminalHandoffCommand(projectPath: string, repoType: string): string {
+  const pathArg = projectPath && projectPath.length > 0 ? projectPath : "<path>";
+  return `npm create nockta-repo@latest -- ${pathArg} --type ${repoType} --cli`;
 }
 
 /**
@@ -106,6 +137,30 @@ export async function runCreateWebSubmit(
   answers: CreateWebAnswers,
   options: CreateWebOptions,
 ): Promise<CreateWebSubmitResult> {
+  // D36 / PART A: a `requiresTerminal` type (Shopify Partner login) can't run
+  // headlessly — never spawn a doomed headless pipeline that would hang or fail
+  // opaquely. Hand back to the terminal with the exact command, and let the
+  // page render the "finish in your terminal" state.
+  let requiresTerminal: { reason: string } | undefined;
+  try {
+    requiresTerminal = resolveScaffolder(answers.repoType).requiresTerminal;
+  } catch (error) {
+    if (!(error instanceof UnknownRepoTypeError)) throw error;
+    // Unknown type falls through to the normal pipeline, which reports it
+    // structurally (exit 2) — not this handoff branch's concern.
+  }
+  if (requiresTerminal) {
+    return {
+      ok: false,
+      exitCode: 0,
+      projectPath: answers.projectPath,
+      requiresTerminal: {
+        reason: requiresTerminal.reason,
+        command: terminalHandoffCommand(answers.projectPath, answers.repoType),
+      },
+    };
+  }
+
   const cliOptions = answersToCliOptions(answers, options);
   const prev = process.exitCode;
   process.exitCode = 0;
@@ -178,5 +233,13 @@ export async function runCreateWeb(options: CreateWebOptions): Promise<never> {
   }
   process.removeListener("SIGINT", onSigint);
   await handle.close().catch(() => {});
+  // D36 / PART A: a requiresTerminal handoff — the browser can't finish this
+  // type; print the exact terminal command so the user can continue there.
+  if (result.requiresTerminal) {
+    process.stderr.write(
+      `\n  This project type must be finished in your terminal:\n    ${result.requiresTerminal.reason}\n\n` +
+        `  Run:\n    ${result.requiresTerminal.command}\n\n`,
+    );
+  }
   process.exit(result.exitCode);
 }

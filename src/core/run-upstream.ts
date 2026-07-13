@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import type { StdioOptions } from "node:child_process";
 
 /**
  * Structured outcome of running an upstream scaffolder command. Returned on
@@ -51,8 +52,14 @@ export type RunUpstreamOptions = {
    * than branching per `interactiveStdio`. Override only for tests that need
    * to capture output programmatically instead of relaying it to the user's
    * terminal.
+   *
+   * Accepts a full `StdioOptions` array too (D36 / PART A): the web-submit
+   * path passes `["ignore", "inherit", "inherit"]` so a browser-driven run
+   * NEVER depends on the launching terminal's stdin (upstream can't block on a
+   * prompt), while its normal output still relays to the terminal as the run
+   * log. See `commands/create.ts::upstreamStdio()`.
    */
-  stdio?: "inherit" | "pipe";
+  stdio?: StdioOptions;
   /**
    * When true, short-circuits before ever calling `spawn` — returns a
    * synthetic success result immediately. Belt-and-suspenders: the `create`

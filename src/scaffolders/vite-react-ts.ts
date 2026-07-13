@@ -16,6 +16,9 @@ export const viteReactTsScaffolder: ScaffolderDefinition = {
   upstreamTool: "create-vite",
   conceptualCommand: "npm create vite@latest <project-path> -- --template react-ts",
   interactiveStdio: false,
+  // D36: the repo-type contract pins `--template react-ts`, which is the only
+  // choice create-vite would prompt for — so there are NO surfaced options.
+  upstreamOptions: [],
   buildCommand: (targetPath, passthroughArgs = []) => ({
     name: "create-vite",
     command: "npm",

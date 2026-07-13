@@ -1,5 +1,30 @@
 import { basename } from "node:path";
-import type { ScaffolderDefinition } from "../types/scaffold.js";
+import type { ScaffolderDefinition, UpstreamOption } from "../types/scaffold.js";
+import { buildUpstreamOptionArgs } from "./upstream-options.js";
+
+/**
+ * @react-native-community/cli `init` options surfaced as web fields (D36).
+ * Verified 2026-07-13 against the CLI's own `docs/commands.md`: `--pm
+ * npm|yarn|bun` selects the package manager (CLI default is yarn; Nockta
+ * defaults npm for ecosystem consistency, emitted explicitly). `--directory`/
+ * `--skip-install`/`--skip-git-init` are already pinned by this scaffolder's
+ * base args, so they are not surfaced.
+ */
+const reactNativeUpstreamOptions: UpstreamOption[] = [
+  {
+    key: "pm",
+    label: "Package manager",
+    description: "Which package manager the RN CLI configures.",
+    kind: "choice",
+    choices: [
+      { value: "npm", label: "npm" },
+      { value: "yarn", label: "yarn" },
+      { value: "bun", label: "bun" },
+    ],
+    default: "npm",
+    flag: "--pm",
+  },
+];
 
 /**
  * Derives a valid `@react-native-community/cli init` positional `Name` argument from the
@@ -58,7 +83,8 @@ export const reactNativeScaffolder: ScaffolderDefinition = {
     "npx @react-native-community/cli@latest init <Name> --directory <project-path> --skip-install --skip-git-init true",
   interactiveStdio: false,
   provisional: false,
-  buildCommand: (targetPath, passthroughArgs = []) => ({
+  upstreamOptions: reactNativeUpstreamOptions,
+  buildCommand: (targetPath, passthroughArgs = [], upstreamAnswers) => ({
     name: "@react-native-community/cli",
     command: "npx",
     args: [
@@ -70,6 +96,7 @@ export const reactNativeScaffolder: ScaffolderDefinition = {
       "--skip-install",
       "--skip-git-init",
       "true",
+      ...buildUpstreamOptionArgs(reactNativeUpstreamOptions, upstreamAnswers),
       ...passthroughArgs,
     ],
   }),

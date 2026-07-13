@@ -149,6 +149,12 @@ export function renderCreateWebPage(project: WebProjectSchema, skills: InjectWiz
   .done.fail .check { background: var(--clash-tint); color: var(--clash-ink); border-color: var(--clash); }
   .done h2 { font-size: 22px; margin: 18px 0 6px; font-weight: 700; }
   .done p { color: var(--muted); }
+  .done.handoff .check { background: var(--lock-tint); color: var(--lock); border-color: var(--border-strong); }
+  .cmdbox { margin: 18px auto 0; max-width: 560px; text-align: left; padding: 12px 14px; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-size: 13px; color: var(--ink); overflow-x: auto; white-space: pre; }
+
+  /* D36 upstream-scaffolder options + requiresTerminal warning */
+  .warn-note { font-size: 12.5px; color: var(--lock); background: var(--lock-tint); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: 10px 12px; line-height: 1.5; max-width: 62ch; }
+  .warn-note b { font-weight: 700; }
 </style>
 </head>
 <body>
@@ -314,6 +320,7 @@ export function renderCreateWebPage(project: WebProjectSchema, skills: InjectWiz
   // client-side (no server round-trip) from PROJECT.archPresetsByType when the primary changes.
   function onPrimaryTypeChange() {
     rebuildArchitecture();
+    rebuildUpstreamOptions();
     updateAlsoDisabling();
     updateConfirmEnabled();
     scheduleRederive();
@@ -340,6 +347,77 @@ export function renderCreateWebPage(project: WebProjectSchema, skills: InjectWiz
       if (pill) pill.style.opacity = isPrimary ? "0.4" : "";
     });
     syncPillLabels("also-types", false);
+  }
+
+  // ---- D36: upstream-scaffolder options (per selected primary type) ----
+  // Rebuilt client-side on a type change (like the architecture card) from the
+  // maps embedded in PROJECT — no server round-trip. Types that pin every
+  // choice render nothing; a requiresTerminal type renders an up-front warning.
+  function rebuildUpstreamOptions() {
+    var host = document.getElementById("upstream-options"); if (!host) return;
+    host.innerHTML = "";
+    var primary = firstChecked("repo-type");
+    if (!primary) return;
+    var reason = PROJECT.requiresTerminalByType && PROJECT.requiresTerminalByType[primary];
+    if (reason) { host.appendChild(renderRequiresTerminalCard(reason)); return; }
+    var opts = (PROJECT.upstreamOptionsByType && PROJECT.upstreamOptionsByType[primary]) || [];
+    if (opts.length === 0) return;
+    host.appendChild(renderUpstreamOptionsCard(opts));
+  }
+  function renderRequiresTerminalCard(reason) {
+    var card = el("div", "card");
+    var head = el("div", "card-head"); head.appendChild(el("h3", null, "Finish in your terminal")); card.appendChild(head);
+    var body = el("div", "card-body");
+    var w = el("div", "warn-note");
+    w.appendChild(el("b", null, "\\u26A0 This project type can't be created from the browser. "));
+    w.appendChild(document.createTextNode(reason));
+    body.appendChild(w);
+    card.appendChild(body); return card;
+  }
+  function renderUpstreamOptionsCard(opts) {
+    var card = el("div", "card");
+    var head = el("div", "card-head");
+    head.appendChild(el("h3", null, "Upstream scaffolder options"));
+    head.appendChild(el("span", "card-hint", "Passed to the official scaffolder"));
+    card.appendChild(head);
+    var body = el("div", "card-body");
+    opts.forEach(function (o) { body.appendChild(renderUpstreamOption(o)); });
+    card.appendChild(body); return card;
+  }
+  function renderUpstreamOption(o) {
+    var stepId = "uopt:" + o.key;
+    if (o.kind === "boolean") {
+      return renderChoice(stepId, { value: "true", label: o.label, description: o.description, checked: o["default"] === true }, {});
+    }
+    if (o.kind === "choice") {
+      var wrap = el("div");
+      wrap.appendChild(el("div", "section-h", o.label));
+      (o.choices || []).forEach(function (c) {
+        wrap.appendChild(renderChoice(stepId, { value: c.value, label: c.label, checked: c.value === o["default"] }, { single: true }));
+      });
+      if (o.description) wrap.appendChild(el("div", "fhint", o.description));
+      return wrap;
+    }
+    // text
+    var f = el("div", "field");
+    f.appendChild(el("label", "flabel", o.label));
+    var input = el("input"); input.type = "text"; input.setAttribute("data-stepid", stepId);
+    input.value = o["default"] != null ? o["default"] : "";
+    f.appendChild(input);
+    if (o.description) f.appendChild(el("div", "fhint", o.description));
+    return f;
+  }
+  function collectUpstreamOptions() {
+    var primary = firstChecked("repo-type");
+    var opts = (primary && PROJECT.upstreamOptionsByType && PROJECT.upstreamOptionsByType[primary]) || [];
+    var out = {};
+    opts.forEach(function (o) {
+      var stepId = "uopt:" + o.key;
+      if (o.kind === "boolean") out[o.key] = checkedValues(stepId).length > 0;
+      else if (o.kind === "choice") { var v = firstChecked(stepId); out[o.key] = v != null ? v : o["default"]; }
+      else { var inp = document.querySelector('input[data-stepid="' + stepId + '"]'); out[o.key] = inp ? inp.value.trim() : o["default"]; }
+    });
+    return out;
   }
 
   // ================= SKILLS SECTION (inject's schema) =================
@@ -489,6 +567,7 @@ export function renderCreateWebPage(project: WebProjectSchema, skills: InjectWiz
       adapters: checkedValues("adapters"),
       skills: skillsDelta,
       razor: razorDelta,
+      upstreamOptions: collectUpstreamOptions(),
       confirmed: true
     };
   }
@@ -507,6 +586,16 @@ export function renderCreateWebPage(project: WebProjectSchema, skills: InjectWiz
     document.querySelector(".masthead").style.display = "none";
     var bar = document.querySelector(".bar"); if (bar) bar.style.display = "none";
     var app = document.getElementById("app"); app.className = ""; app.innerHTML = "";
+    // D36 / PART A: a terminal-handoff (requiresTerminal) — neither success nor
+    // a crash; tell the user exactly what to run in their terminal.
+    if (res && res.requiresTerminal) {
+      var h = el("div", "done handoff");
+      var hchk = el("div", "check"); hchk.textContent = "\\u2318"; h.appendChild(hchk);
+      h.appendChild(el("h2", null, "Finish in your terminal"));
+      h.appendChild(el("p", null, res.requiresTerminal.reason));
+      var cmd = el("div", "cmdbox mono"); cmd.textContent = res.requiresTerminal.command; h.appendChild(cmd);
+      app.appendChild(h); return;
+    }
     var d = el("div", "done" + (ok ? "" : " fail"));
     var chk = el("div", "check"); chk.textContent = ok ? "\\u2713" : "\\u2717"; d.appendChild(chk);
     d.appendChild(el("h2", null, ok ? "Project created — you can close this tab" : "Something went wrong"));
@@ -546,7 +635,13 @@ export function renderCreateWebPage(project: WebProjectSchema, skills: InjectWiz
         // Tag the arch card body so client-side preset rebuilds can target it.
         var body = node.querySelector(".card-body"); if (body) body.id = "arch-body";
       }
+      if (step.id === "repo-type") {
+        // D36: host for the per-type "Upstream scaffolder options" card /
+        // requiresTerminal warning, rebuilt on a primary-type change.
+        var uo = el("div"); uo.id = "upstream-options"; app.appendChild(uo);
+      }
     });
+    rebuildUpstreamOptions();
 
     var band2 = el("div", "section-band");
     band2.appendChild(el("span", "num", "2"));

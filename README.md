@@ -200,6 +200,29 @@ serves and prints the URL without auto-launching a browser. Monorepo-target sele
 Extras/claude-mem step are not yet wired into the web page (falls through to the existing create
 pipeline / is simply unavailable there) — use the terminal wizard or flags for those.
 
+> **Flags after `--web` need the `--` separator.** `npm create nockta-repo` forwards flags to the CLI
+> only after a literal `--`, so combine `--web` with flags like this:
+> `npm create nockta-repo@latest -- --web --type next`. Without the separator, npm swallows the flags
+> and you get the bare wizard. (A globally installed `create-nockta-repo --web --type next` needs no
+> separator — this only applies to the `npm create` / `npm init` launcher.)
+
+#### Upstream scaffolder options in the browser (D36)
+
+When you pick a project type, the Project section also shows an **"Upstream scaffolder options"** card
+surfacing the choices the official scaffolder would otherwise prompt for — create-next-app's
+TypeScript / Tailwind / ESLint / App Router / `src/` / Turbopack / import-alias, `nest new`'s package
+manager / language / strict, Hydrogen's language / styling / markets, and the React Native package
+manager. Defaults are pre-filled from the same schema the CLI `--yes` path uses, so the two can never
+drift. Your answers flow into the submit payload and become explicit non-interactive flags — the web
+submit spawns the upstream scaffolder **with stdin detached**, so it never prompts (or hangs) in the
+launching terminal. Types whose contract pins every choice (Vite `--template react-ts`, Expo
+`--template default@sdk-57`, the two option-less Shopify types) show no options card.
+
+**Types that can't run headless.** `shopify-app` needs a browser login to your Shopify Partner
+organization, which the wizard can't drive. Selecting it shows a **"Finish in your terminal"** warning
+up front, and on submit the page hands you the exact command to run in your terminal rather than
+hanging or pretending success.
+
 <!-- VERIFIED-EXAMPLE SLOT: a real captured wizard session transcript belongs here — being produced
      separately. -->
 

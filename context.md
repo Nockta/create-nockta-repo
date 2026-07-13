@@ -25,7 +25,29 @@ EXECUTION now requires `--yes`, aligning with `inject-nockta-skills` and spec §
 explicit OWNER pre-publish decision, not invented by this or any milestone; see `README.md`'s own
 "License" section for the same note where a user/owner will actually see it.
 
-## Current state (bugfix, this pass, 2026-07-11 — headless-scaffolder `CI=true` fix)
+## Current pass (D36, 2026-07-13 — upstream scaffolder options as web fields + web terminal-independence)
+
+Owner ask: "Surface the upstream choices as web form fields." Two parts. **PART A:** the `--web` submit
+spawns the upstream scaffolder NON-INTERACTIVELY — option answers become explicit flags AND stdin is
+detached (`stdio: ["ignore","inherit","inherit"]` via `commands/create.ts::upstreamStdio()`, set only
+when the web submit passes `nonInteractiveUpstream: true`), so a browser-driven run never depends on
+the launching terminal (previously it relied only on `run-upstream.ts`'s `forceCI` env). A scaffolder
+that can't run headless at all (`shopify-app` — Shopify Partner browser login, verified 2026-07-13, no
+flag bypass) carries a `requiresTerminal` marker; the web submit short-circuits to a terminal-handoff
+(`... --type shopify-app --cli`) instead of hanging. **PART B:** `ScaffolderDefinition` gains
+declarative `upstreamOptions: UpstreamOption[]` + optional `requiresTerminal`; `buildCommand`'s new 3rd
+arg (answers) is translated by the shared pure `scaffolders/upstream-options.ts::buildUpstreamOptionArgs()`
+(present-keys-only, so bare `buildCommand(path)` is unchanged — the wizard keeps upstream interactive).
+`upstreamOptionDefaults()` is the ONE source of defaults, shared by the CLI `--yes` path and the web
+pre-fill. `web/project-schema.ts` embeds `upstreamOptionsByType` + `requiresTerminalByType`; `page.ts`
+renders a reactive "Upstream scaffolder options" card / warning; the answers ride in the submit payload.
+Options surfaced (verified vs official docs 2026-07-13): next 7, nest 3, shopify-headless 3
+(provisional), react-native 1; vite-react-ts/expo/shopify-theme/shopify-app 0. Enum-parity untouched.
+No regressions: **363 tests pass / 1 skip** (+34); typecheck + build clean; live page driven in Chrome
+(options card + shopify-app warning render, 0 console errors — aesthetic polish owner-eyeball). See
+`decisions.md` D36, `src/scaffolders/CONTEXT.md`, `src/web/CONTEXT.md`.
+
+## Previous pass (bugfix, 2026-07-11 — headless-scaffolder `CI=true` fix)
 
 Fixes a verified real bug: when `create` spawns an upstream scaffolder (`create-next-app`, etc.)
 non-interactively (no human at the inherited stdio — the CLI `--yes` flag, or the `--web` submit

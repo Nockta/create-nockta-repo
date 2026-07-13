@@ -10,6 +10,10 @@ export const shopifyThemeScaffolder: ScaffolderDefinition = {
   upstreamTool: "Shopify CLI (theme)",
   conceptualCommand: "shopify theme init <project-path>",
   interactiveStdio: true,
+  // D36: `shopify theme init` just clones a Git theme template (Dawn) — no
+  // login/auth, no scaffold choices to surface (verified 2026-07-13 against
+  // shopify.dev theme-init). No options, and NOT requiresTerminal.
+  upstreamOptions: [],
   buildCommand: (targetPath, passthroughArgs = []) => ({
     name: "shopify-cli",
     command: "shopify",

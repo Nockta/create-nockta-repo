@@ -35,6 +35,10 @@ export const expoScaffolder: ScaffolderDefinition = {
     "npx create-expo-app@latest <project-path> --yes --no-install --template default@sdk-57 --no-agents-md",
   interactiveStdio: false,
   provisional: false,
+  // D36: the repo-type contract pins `--template default@sdk-57` (the only
+  // choice create-expo-app would prompt for) and already passes `--yes`, so
+  // there are NO surfaced options.
+  upstreamOptions: [],
   buildCommand: (targetPath, passthroughArgs = []) => ({
     name: "create-expo-app",
     command: "npx",

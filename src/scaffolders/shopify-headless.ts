@@ -1,4 +1,58 @@
-import type { ScaffolderDefinition } from "../types/scaffold.js";
+import type { ScaffolderDefinition, UpstreamOption } from "../types/scaffold.js";
+import { buildUpstreamOptionArgs } from "./upstream-options.js";
+
+/**
+ * `npm create @shopify/hydrogen`'s interactive choices, surfaced as web fields
+ * (D36). Verified 2026-07-13 against shopify.dev (hydrogen init / getting-
+ * started, @shopify/hydrogen 2026.x): `--language ts|js`, `--styling
+ * tailwind|vanilla-extract|css-modules|postcss|none`, `--markets
+ * none|subfolders|subdomains|domains`. Still PROVISIONAL (preset-dependent —
+ * see the module header); these flags land INSIDE the `--` forwarded segment,
+ * after `--path <target>`.
+ */
+const shopifyHeadlessUpstreamOptions: UpstreamOption[] = [
+  {
+    key: "language",
+    label: "Language",
+    description: "TypeScript or JavaScript storefront.",
+    kind: "choice",
+    choices: [
+      { value: "ts", label: "TypeScript" },
+      { value: "js", label: "JavaScript" },
+    ],
+    default: "ts",
+    flag: "--language",
+  },
+  {
+    key: "styling",
+    label: "Styling",
+    description: "The styling strategy to scaffold.",
+    kind: "choice",
+    choices: [
+      { value: "tailwind", label: "Tailwind" },
+      { value: "vanilla-extract", label: "Vanilla Extract" },
+      { value: "css-modules", label: "CSS Modules" },
+      { value: "postcss", label: "PostCSS" },
+      { value: "none", label: "None" },
+    ],
+    default: "tailwind",
+    flag: "--styling",
+  },
+  {
+    key: "markets",
+    label: "Markets URL structure",
+    description: "URL structure for multiple markets.",
+    kind: "choice",
+    choices: [
+      { value: "none", label: "None" },
+      { value: "subfolders", label: "Subfolders" },
+      { value: "subdomains", label: "Subdomains" },
+      { value: "domains", label: "Domains" },
+    ],
+    default: "none",
+    flag: "--markets",
+  },
+];
 
 /**
  * Shopify Headless — spec §3.7. PROVISIONAL.
@@ -45,10 +99,19 @@ export const shopifyHeadlessScaffolder: ScaffolderDefinition = {
     "npm create @shopify/hydrogen@latest -- --path <project-path>  # PROVISIONAL, preset-dependent",
   interactiveStdio: true,
   provisional: true,
-  buildCommand: (targetPath, passthroughArgs = []) => ({
+  upstreamOptions: shopifyHeadlessUpstreamOptions,
+  buildCommand: (targetPath, passthroughArgs = [], upstreamAnswers) => ({
     name: "create-hydrogen (provisional)",
     command: "npm",
-    args: ["create", "@shopify/hydrogen@latest", "--", "--path", targetPath, ...passthroughArgs],
+    args: [
+      "create",
+      "@shopify/hydrogen@latest",
+      "--",
+      "--path",
+      targetPath,
+      ...buildUpstreamOptionArgs(shopifyHeadlessUpstreamOptions, upstreamAnswers),
+      ...passthroughArgs,
+    ],
   }),
   notes:
     "PROVISIONAL per spec §3.7: exact upstream tooling depends on the chosen headless " +

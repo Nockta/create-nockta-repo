@@ -8,8 +8,10 @@ import {
   NO_ARCHITECTURE_VALUE,
 } from "../wizard/core/build-schema.js";
 import { listArchitecturePresets } from "../architecture/get-architecture-path.js";
+import { SCAFFOLDER_REGISTRY } from "../scaffolders/registry.js";
 import { REPO_TYPES } from "../types/repo-type.js";
 import type { RepoType } from "../types/repo-type.js";
+import type { UpstreamOption } from "../types/scaffold.js";
 import type { StepModel } from "../wizard/core/types.js";
 
 /**
@@ -31,6 +33,20 @@ export interface WebProjectSchema {
   archPresetsByType: Record<string, string[]>;
   /** Sentinel for the "none / --no-arch" architecture choice (mirrors build-schema's `NO_ARCHITECTURE_VALUE`). */
   noArchitectureValue: string;
+  /**
+   * D36: repoType -> its surfaced upstream-scaffolder options (from the
+   * registry). The page renders an "Upstream scaffolder options" card for the
+   * selected type, rebuilt client-side on a type change (like `archPresetsByType`).
+   * Empty array for types that pin every choice (vite-react-ts, expo, both
+   * option-less Shopify types).
+   */
+  upstreamOptionsByType: Record<string, UpstreamOption[]>;
+  /**
+   * D36 / PART A: repoType -> its `requiresTerminal` reason, only for types
+   * that have one (Shopify app). The page shows an inline warning up front and
+   * the result handoff. Absent key = runs headlessly.
+   */
+  requiresTerminalByType: Record<string, string>;
 }
 
 export interface BuildWebProjectSchemaOptions {
@@ -63,9 +79,20 @@ export function buildWebProjectSchema(options: BuildWebProjectSchemaOptions = {}
   ];
 
   const archPresetsByType: Record<string, string[]> = {};
+  const upstreamOptionsByType: Record<string, UpstreamOption[]> = {};
+  const requiresTerminalByType: Record<string, string> = {};
   for (const type of REPO_TYPES) {
     archPresetsByType[type] = listArchitecturePresets(type);
+    const def = SCAFFOLDER_REGISTRY[type];
+    upstreamOptionsByType[type] = def.upstreamOptions ? [...def.upstreamOptions] : [];
+    if (def.requiresTerminal) requiresTerminalByType[type] = def.requiresTerminal.reason;
   }
 
-  return { steps, archPresetsByType, noArchitectureValue: NO_ARCHITECTURE_VALUE };
+  return {
+    steps,
+    archPresetsByType,
+    noArchitectureValue: NO_ARCHITECTURE_VALUE,
+    upstreamOptionsByType,
+    requiresTerminalByType,
+  };
 }
