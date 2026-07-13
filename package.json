@@ -4,6 +4,14 @@
   "description": "Creates new repositories or project targets by running official framework scaffolders, applying Nockta architecture overlays, and invoking inject-nockta-skills to render AI-tool adapter outputs.",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Nockta/create-nockta-repo.git"
+  },
+  "homepage": "https://github.com/Nockta/create-nockta-repo#readme",
+  "bugs": {
+    "url": "https://github.com/Nockta/create-nockta-repo/issues"
+  },
   "bin": {
     "create-nockta-repo": "dist/cli.js"
   },
@@ -27,6 +35,7 @@
   "publishConfig": {
     "access": "public"
   },
+  "packageManager": "pnpm@10.18.3",
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
@@ -39,7 +48,15 @@
     "nockta",
     "cli",
     "scaffolder",
-    "create"
+    "create",
+    "create-app",
+    "ai",
+    "skills",
+    "next",
+    "vite",
+    "nest",
+    "monorepo",
+    "starter"
   ],
   "dependencies": {
     "@inquirer/core": "^11.2.1",

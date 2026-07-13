@@ -1,0 +1,41 @@
+# Publishes to npm via OIDC "trusted publishing" — NO npm token/secret is used.
+#
+# ONE-TIME PREREQUISITE (npmjs.com, owner-only): configure this package's
+# Trusted Publisher before the first tag push, or `npm publish` will 4xx:
+#   npmjs.com -> package Settings -> "Trusted Publisher" / Publishing access
+#   Provider:          GitHub Actions
+#   Repository:        Nockta/create-nockta-repo
+#   Workflow filename: release.yml
+#   Environment:       (leave blank)
+#
+# npm CLI note: OIDC trusted publishing needs npm >= 11.5.1. actions/setup-node
+# with Node 20 ships npm 10.x, so we upgrade npm to latest before publishing.
+
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  id-token: write # OIDC token for npm provenance + trusted publishing
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: "https://registry.npmjs.org"
+          cache: pnpm
+      - name: Upgrade npm (OIDC trusted publishing needs npm >= 11.5.1)
+        run: npm install -g npm@latest
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Publish to npm with provenance
+        run: npm publish --provenance --access public
