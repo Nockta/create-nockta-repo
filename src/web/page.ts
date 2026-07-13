@@ -79,6 +79,8 @@ export function renderCreateWebPage(project: WebProjectSchema, skills: InjectWiz
   .masthead p { margin: 6px 0 0; color: var(--muted); max-width: 62ch; font-size: 14px; }
 
   .wrap { max-width: 900px; margin: 0 auto; padding: 10px 22px 130px; }
+  /* In-flight submit: the form is locked (every control disabled) and visibly muted. */
+  .wrap.busy { opacity: 0.55; pointer-events: none; }
 
   /* The two big section bands ("Project" / "Skills") — the resolved D30 layout marker. */
   .section-band { display: flex; align-items: baseline; gap: 12px; margin: 30px 0 2px; padding-bottom: 8px; border-bottom: 2px solid var(--border-strong); }
@@ -605,17 +607,42 @@ export function renderCreateWebPage(project: WebProjectSchema, skills: InjectWiz
     app.appendChild(d);
   }
 
+  // ---- in-flight form lock ----
+  // The pipeline (scaffold + inject) can run for tens of seconds. While it runs, the form must be
+  // truthfully non-interactable: every control disabled + the form visibly muted (.busy). Controls
+  // that were ALREADY disabled (locked skill rows, the primary type's also-toggle) are left alone
+  // on unlock — only the ones this lock disabled (marked data-submit-locked) are re-enabled.
+  var submitting = false;
+  function setFormLocked(locked) {
+    document.querySelectorAll("input, button").forEach(function (c) {
+      if (locked) {
+        if (!c.disabled) { c.disabled = true; c.setAttribute("data-submit-locked", "1"); }
+      } else if (c.getAttribute("data-submit-locked") === "1") {
+        c.disabled = false;
+        c.removeAttribute("data-submit-locked");
+      }
+    });
+    var app = document.getElementById("app");
+    if (app) app.className = locked ? "wrap busy" : "wrap";
+  }
+
   function submit(btn, errNode) {
+    if (submitting) return; // one in-flight submit only (server 409s a second anyway — this keeps the client honest too)
     if (!isReady()) { errNode.textContent = "Enter a project name and pick a project type first."; return; }
-    btn.disabled = true; errNode.textContent = "Working… scaffolding + installing skills (this can take a moment).";
+    // Collect BEFORE locking — disabled controls still carry state, but keep the read/lock order obvious.
+    var answers = collectAnswers();
+    submitting = true;
+    setFormLocked(true);
+    errNode.textContent = "Working… scaffolding + installing skills (this can take a moment).";
+    var unlock = function () { submitting = false; setFormLocked(false); updateConfirmEnabled(); };
     fetch("/submit?t=" + encodeURIComponent(TOKEN), {
       method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ token: TOKEN, answers: collectAnswers() })
+      body: JSON.stringify({ token: TOKEN, answers: answers })
     }).then(function (r) { return r.json(); }).then(function (j) {
       if (j && j.ok) showDone(true, j.result);
       else if (j && j.result) showDone(false, j.result);
-      else { errNode.textContent = "Submit failed: " + ((j && j.error) || "unknown error"); btn.disabled = false; }
-    }).catch(function (e) { errNode.textContent = "Network error: " + e; btn.disabled = false; });
+      else { errNode.textContent = "Submit failed: " + ((j && j.error) || "unknown error"); unlock(); }
+    }).catch(function (e) { errNode.textContent = "Network error: " + e; unlock(); });
   }
 
   // ---- initial render ----
