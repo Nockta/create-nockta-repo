@@ -34,7 +34,10 @@ jobs:
           registry-url: "https://registry.npmjs.org"
           cache: pnpm
       - name: Upgrade npm (OIDC trusted publishing needs npm >= 11.5.1)
-        run: npm install -g npm@latest
+        # Pinned to the npm 11.x line, not `npm@latest`: npm 12.0.1 requires
+        # Node >=22.9.0 and this job runs on Node 20 (compatible with 11.x's
+        # `^20.17.0 || >=22.9.0` engine range). `npm@latest` would EBADENGINE here.
+        run: npm install -g npm@11
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Check if this version is already published
