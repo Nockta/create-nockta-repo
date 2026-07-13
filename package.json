@@ -1,6 +1,6 @@
 {
   "name": "create-nockta-repo",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Creates new repositories or project targets by running official framework scaffolders, applying Nockta architecture overlays, and invoking inject-nockta-skills to render AI-tool adapter outputs.",
   "type": "module",
   "license": "Apache-2.0",
