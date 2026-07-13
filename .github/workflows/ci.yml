@@ -29,7 +29,13 @@ jobs:
         with:
           repository: Nockta/inject-nockta-skills
           path: inject-nockta-skills
+      # Default package_json_file ("package.json", relative to $GITHUB_WORKSPACE) no longer
+      # exists at the workspace root now that the repo lives in the create-nockta-repo/
+      # subdir — point pnpm/action-setup at it explicitly (both repos pin the same pnpm
+      # version anyway).
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: create-nockta-repo/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 20
