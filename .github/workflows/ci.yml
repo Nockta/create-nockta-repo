@@ -13,38 +13,46 @@ jobs:
   build-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
       # Several integration tests (create-also/create-skills/enum-parity/web-create-e2e)
       # resolve the sibling `inject-nockta-skills` package as `../inject-nockta-skills`
       # relative to this repo's own root and build/run it for real (never a fixture). A
       # standalone checkout has no such sibling on disk, so those tests fail with
-      # `spawnSync pnpm ENOENT` (cwd doesn't exist). Check it out as an actual sibling
-      # directory here — `path: ../inject-nockta-skills` is relative to $GITHUB_WORKSPACE
-      # (this repo's checkout dir), landing one level up, next to it. Public repo, no
-      # extra token needed.
+      # `spawnSync pnpm ENOENT` (cwd doesn't exist). Both repos are checked out as real
+      # sibling subdirectories of $GITHUB_WORKSPACE (actions/checkout refuses a `path`
+      # that resolves outside the workspace, so `path: ../inject-nockta-skills` on its
+      # own doesn't work — every step below runs with an explicit `working-directory`
+      # instead). Public repo, no extra token needed.
+      - uses: actions/checkout@v4
+        with:
+          path: create-nockta-repo
       - uses: actions/checkout@v4
         with:
           repository: Nockta/inject-nockta-skills
-          path: ../inject-nockta-skills
+          path: inject-nockta-skills
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
+          cache-dependency-path: create-nockta-repo/pnpm-lock.yaml
       # Pre-build the sibling so test/*.ts's own ensureInjectBuilt()-style guards
       # (existsSync(dist/cli.js) -> skip) find it already built and never need to shell out
       # to `pnpm build` themselves mid-test-run.
       - name: Install sibling inject-nockta-skills dependencies
-        working-directory: ../inject-nockta-skills
+        working-directory: inject-nockta-skills
         run: pnpm install --frozen-lockfile
       - name: Build sibling inject-nockta-skills
-        working-directory: ../inject-nockta-skills
+        working-directory: inject-nockta-skills
         run: pnpm build
       - name: Install dependencies
+        working-directory: create-nockta-repo
         run: pnpm install --frozen-lockfile
       - name: Build
+        working-directory: create-nockta-repo
         run: pnpm build
       - name: Typecheck
+        working-directory: create-nockta-repo
         run: pnpm typecheck
       - name: Test
+        working-directory: create-nockta-repo
         run: pnpm test
