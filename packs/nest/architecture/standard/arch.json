@@ -1,0 +1,24 @@
+{
+  "name": "standard",
+  "directories": [
+    "src/modules/_template",
+    "src/common/decorators",
+    "src/common/filters",
+    "src/common/guards",
+    "src/common/interceptors",
+    "src/common/pipes",
+    "src/config"
+  ],
+  "files": [
+    {
+      "from": "files/modules-readme.md",
+      "to": "src/modules/_template/README.md"
+    },
+    {
+      "from": "files/gitkeep",
+      "to": "src/common/decorators/.gitkeep"
+    }
+  ],
+  "moves": [],
+  "deletes": []
+}

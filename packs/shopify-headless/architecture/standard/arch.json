@@ -1,0 +1,14 @@
+{
+  "name": "standard",
+  "directories": [
+    "docs/nockta"
+  ],
+  "files": [
+    {
+      "from": "files/architecture-readme.md",
+      "to": "docs/nockta/ARCHITECTURE.md"
+    }
+  ],
+  "moves": [],
+  "deletes": []
+}

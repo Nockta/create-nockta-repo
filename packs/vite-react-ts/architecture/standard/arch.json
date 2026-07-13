@@ -1,0 +1,25 @@
+{
+  "name": "standard",
+  "directories": [
+    "src/components/ui",
+    "src/components/layout",
+    "src/features/_template/components",
+    "src/features/_template/hooks",
+    "src/lib/env",
+    "src/lib/http",
+    "src/types",
+    "src/config"
+  ],
+  "files": [
+    {
+      "from": "files/features-readme.md",
+      "to": "src/features/_template/README.md"
+    },
+    {
+      "from": "files/gitkeep",
+      "to": "src/components/ui/.gitkeep"
+    }
+  ],
+  "moves": [],
+  "deletes": []
+}

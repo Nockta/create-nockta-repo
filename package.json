@@ -1,0 +1,61 @@
+{
+  "name": "create-nockta-repo",
+  "version": "0.1.0",
+  "description": "Creates new repositories or project targets by running official framework scaffolders, applying Nockta architecture overlays, and invoking inject-nockta-skills to render AI-tool adapter outputs.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "bin": {
+    "create-nockta-repo": "dist/cli.js"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "packs",
+    "README.md",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm build && pnpm typecheck && pnpm test"
+  },
+  "keywords": [
+    "nockta",
+    "cli",
+    "scaffolder",
+    "create"
+  ],
+  "dependencies": {
+    "@inquirer/core": "^11.2.1",
+    "@inquirer/prompts": "^8.5.2",
+    "commander": "^15.0.0",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}
