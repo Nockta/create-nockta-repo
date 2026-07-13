@@ -125,6 +125,11 @@ proof-of-done pattern, see this file's Milestone 8 section for precedent).
   existing (reused, not reimplemented) `commands/create.ts` internals, and the preview step's
   decisions.md D18 data-delegation to inject's own `install --dry-run --json`.
 - **`README.md`** — user-facing install/usage guide, incl. the wizard.
+- **`RELEASING.md`** — maintainer release process: tag push -> `release.yml` -> OIDC trusted
+  publishing -> `npm publish --provenance`; first-release bootstrap (npm has no pending-publisher
+  mechanism for an unpublished name — verified mid-2026); `inject-nockta-skills` must publish
+  first (this package spawns it at runtime); troubleshooting; owner-vs-Fable step split. Not in
+  the npm `files` whitelist — doesn't ship in the tarball.
 - **`packs/`** — per-repo-type architecture packs (`<repo-type>/architecture/standard/arch.json` +
   `files/`) — real, authored content for all eight repo types (six as of Milestone 4, plus
   `react-native`/`expo` added D25 this pass). See `src/architecture/CONTEXT.md`'s "Standard

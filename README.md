@@ -446,6 +446,14 @@ Wraps and defers to these upstream tools, each under its own license: `create-ne
 
 ---
 
+## Releasing
+
+Maintainer-facing release process (tag push → CI publishes to npm with provenance, no tokens after
+first release; note `inject-nockta-skills` must be published first) is documented in
+[`RELEASING.md`](./RELEASING.md).
+
+---
+
 ## Contributing
 
 ### Adding a new repo type
