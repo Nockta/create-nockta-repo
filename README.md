@@ -437,8 +437,7 @@ any time — `create-nockta-repo` is only for standing up a *new* one.
 ## Attribution & license
 
 **License.** This package is Apache-2.0-licensed (see `package.json` `"license"` field, the root
-`LICENSE` file, and the root `NOTICE` file). It remains `"private": true` in `package.json` pending
-the owner's decision to publish — the license declaration is independent of that gate.
+`LICENSE` file, and the root `NOTICE` file).
 
 Wraps and defers to these upstream tools, each under its own license: `create-next-app`,
 `create-vite`, `@nestjs/cli`, the Shopify CLI, `@shopify/create-hydrogen`,
