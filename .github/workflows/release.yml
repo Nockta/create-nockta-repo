@@ -26,22 +26,61 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
+      # prepublishOnly ("pnpm build && pnpm typecheck && pnpm test") shells out to the
+      # same suite ci.yml runs, including enum-parity/create-also/create-skills/
+      # web-create-e2e tests that resolve the sibling `inject-nockta-skills` package as
+      # `../inject-nockta-skills` and build/run it for real (never a fixture). A
+      # standalone checkout has no such sibling on disk, so those tests fail with
+      # `spawnSync pnpm ENOENT` (cwd doesn't exist) — this took down the v0.1.1 tag
+      # publish. Mirror ci.yml's fix: check out both repos as real sibling
+      # subdirectories of $GITHUB_WORKSPACE (actions/checkout refuses a `path` that
+      # resolves outside the workspace, so `path: ../inject-nockta-skills` on its own
+      # doesn't work — every step below runs with an explicit `working-directory`
+      # instead). Sibling is pinned to its main branch: enum-parity is a parity check
+      # against current main, not a specific tagged release, matching ci.yml. Public
+      # repo, no extra token needed.
       - uses: actions/checkout@v4
+        with:
+          path: create-nockta-repo
+      - uses: actions/checkout@v4
+        with:
+          repository: Nockta/inject-nockta-skills
+          path: inject-nockta-skills
+      # Default package_json_file ("package.json", relative to $GITHUB_WORKSPACE) no longer
+      # exists at the workspace root now that the repo lives in the create-nockta-repo/
+      # subdir — point pnpm/action-setup at it explicitly (both repos pin the same pnpm
+      # version anyway). pnpm/action-setup installs pnpm onto PATH globally, so it's also
+      # visible to the prepublishOnly-spawned test processes below, not just steps in this
+      # workflow file.
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: create-nockta-repo/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           registry-url: "https://registry.npmjs.org"
           cache: pnpm
+          cache-dependency-path: create-nockta-repo/pnpm-lock.yaml
+      # Pre-build the sibling so test/*.ts's own ensureInjectBuilt()-style guards
+      # (existsSync(dist/cli.js) -> skip) find it already built and never need to shell out
+      # to `pnpm build` themselves mid-test-run.
+      - name: Install sibling inject-nockta-skills dependencies
+        working-directory: inject-nockta-skills
+        run: pnpm install --frozen-lockfile
+      - name: Build sibling inject-nockta-skills
+        working-directory: inject-nockta-skills
+        run: pnpm build
+      - name: Install dependencies
+        working-directory: create-nockta-repo
+        run: pnpm install --frozen-lockfile
       - name: Upgrade npm (OIDC trusted publishing needs npm >= 11.5.1)
         # Pinned to the npm 11.x line, not `npm@latest`: npm 12.0.1 requires
         # Node >=22.9.0 and this job runs on Node 20 (compatible with 11.x's
         # `^20.17.0 || >=22.9.0` engine range). `npm@latest` would EBADENGINE here.
         run: npm install -g npm@11
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
       - name: Check if this version is already published
         id: guard
+        working-directory: create-nockta-repo
         run: |
           name=$(node -p "require('./package.json').name")
           version=$(node -p "require('./package.json').version")
@@ -51,6 +90,10 @@ jobs:
           else
             echo "already-published=false" >> "$GITHUB_OUTPUT"
           fi
+      # working-directory matters here beyond running the prepublishOnly test suite in the
+      # right place: npm validates package.json's `repository` URL against the publish cwd
+      # for provenance, so this must run from create-nockta-repo/, not the workspace root.
       - name: Publish to npm with provenance
         if: steps.guard.outputs.already-published != 'true'
+        working-directory: create-nockta-repo
         run: npm publish --provenance --access public
