@@ -12,6 +12,15 @@ version therefore ships with an npm **provenance attestation** proving it was bu
 GitHub Actions workflow from this exact commit, and — because trusted publishing is configured — no
 npm token secret ever needs to exist in this repo's Actions secrets after the bootstrap step.
 
+`release.yml` also carries an **idempotency guard**: before publishing, it runs `npm view
+<name>@<version> version` for the version in `package.json`. If that version already exists on the
+registry, the workflow emits a `::notice::` ("`<name>@<version>` already on registry — skipping
+publish") and skips the `npm publish` step via `if: steps.guard.outputs.already-published !=
+'true'` — the run still finishes **green**, it just does nothing. This makes re-tagging a version
+that's already published (e.g. re-applying `v0.1.0` as the release marker after its bootstrap
+local-publish) a safe no-op instead of a failing `npm publish` 409/403. New versions are unaffected
+— the guard resolves `already-published=false` and the publish step runs exactly as before.
+
 ## Order of operations: `inject-nockta-skills` must go first
 
 **`create-nockta-repo` spawns `npx inject-nockta-skills@latest install ...` as a child process at
